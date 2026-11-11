@@ -1,6 +1,6 @@
 # 安装与使用教程
 
-燕子运行在 DeepSeek Harness（DSH）内。安装前先确认 DSH 可以正常打开，并能找到 **Plugins / 插件管理**。
+燕子 · 破甲工作台运行在 DeepSeek Harness（DSH）内。安装前先确认 DSH 可以正常打开，并能找到 **Plugins / 插件管理**。
 
 DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harness
 
@@ -9,24 +9,24 @@ DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harnes
 在 DSH 的插件安装输入框粘贴：
 
 ```text
-git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.0
+git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.1
 ```
 
-这是固定到 `v1.3.0` 标签的 Git 包地址。等待安装完成，启用燕子；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
+这是固定到 `v1.3.1` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
 
 也可以让 DSH 中已启用插件管理工具的会话执行：
 
 ```text
 请使用 plugin_manager 安装组合包：
 action: install_bundle
-target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.0
+target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.1
 ```
 
 下列路径是 ZIP 本地安装流程。
 
 ## 1. 下载并解压
 
-打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.3.0.zip` 插件包，解压到一个固定目录。例如：
+打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.3.1.zip` 插件包，解压到一个固定目录。例如：
 
 ```text
 C:\Tools\dsh-yanyu-purge
@@ -51,9 +51,9 @@ dsh-yanyu-purge/
 
 1. 打开 DSH 的 **Plugins / 插件管理**。
 2. 找到安装入口，选择本地目录安装，或在安装目标中填写解压目录的绝对路径。
-3. 提交安装，确认燕子插件处于启用状态。
+3. 提交安装，确认破甲工作台插件处于启用状态。
 4. 若应用提示需要重启，重启 DSH；否则刷新或重新打开界面。
-5. 侧栏出现 **燕子**，点击打开工作台。
+5. 侧栏出现 **破甲工作台**，点击打开工作台。
 
 包名是 `@local/dsh-yanyu-purge`，Host 插件名是 `dsh-yanyu-purge`。菜单文字可能随 DSH 版本变化，安装目标始终是包含 `package.json` 的目录。
 
@@ -72,10 +72,10 @@ dsh-yanyu-purge/
 
 ## 4. 确认提示词已进入请求
 
-1. 打开燕子面板，确认“面板已连接”。
+1. 打开破甲工作台面板，确认“面板已连接”。
 2. 选择需要的方案。
 3. 回到对话，发送一条新消息。
-4. 再看燕子面板，等待自动刷新。
+4. 再看破甲工作台面板，等待自动刷新。
 
 | 状态 | 下一步 |
 |---|---|
@@ -111,7 +111,7 @@ includeRuntimeContext: true
 
 已有安装若保存了 `mode: inject`，更新文件不会自动把它改成 `purge`。希望使用覆盖模式时，把现有配置的 `mode` 改为 `purge`，再重新加载。面板会显示实际运行模式。
 
-同一宿主只应启用一个使用 `complete` 的覆盖提示词插件。多个覆盖插件同时存在时，DSH 会报告 `multiple complete prompt sections`；停用其中一个，或将燕子设为 `inject` 后重新加载。
+同一宿主只应启用一个使用 `complete` 的覆盖提示词插件。多个覆盖插件同时存在时，DSH 会报告 `multiple complete prompt sections`；停用其中一个，或将破甲工作台设为 `inject` 后重新加载。
 
 ## 6. 更新插件
 
@@ -119,13 +119,13 @@ includeRuntimeContext: true
 2. 将新版完整解压到固定插件目录，包含 `prompts/` 和 `locale/`。
 3. 在 DSH 插件管理中重新安装该目录或重新加载插件。若宿主使用安装副本，仅覆盖下载目录不会自动更新运行副本。
 4. 按应用提示重启或刷新界面。
-5. 打开燕子，核对方案名称与运行模式；发送新消息，再检查确认记录。
+5. 打开破甲工作台，核对方案名称与运行模式；发送新消息，再检查确认记录。
 
 如果自己修改过提示词资源或配置，更新前单独保留这些改动，更新后再按需合并。
 
 ## 7. 常见问题
 
-### 侧栏没有“燕子”
+### 侧栏没有“破甲工作台”
 
 检查插件是否已启用、安装目录是否直接包含 `package.json`，以及是否按提示完成重新加载。确认下载的是完整插件包，`client.js` 与 `icon.svg` 都在目录中。
 

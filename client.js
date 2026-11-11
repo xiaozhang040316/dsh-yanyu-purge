@@ -64,9 +64,9 @@ window.__ModuleLoader__.load({
       .yy-shell{max-width:1040px;margin-inline:auto;padding:32px 36px 24px}
       .yy-masthead{background:var(--yy-night);color:#fffaf2}
       .yy-masthead .yy-shell{padding-block:28px 30px}
-      .yy-brand-row{display:flex;align-items:center;justify-content:space-between;gap:20px}
+      .yy-brand-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px}
       .yy-brand{display:flex;align-items:center;gap:14px;min-width:0}
-      .yy-brand h1{font:800 27px/1.25 var(--yy-serif);letter-spacing:.04em}
+      .yy-brand h1{white-space:nowrap;font:800 27px/1.25 var(--yy-serif);letter-spacing:.04em}
       .yy-brand p{font-size:12px;color:var(--yy-sky);margin-top:4px}
       .yy-site-link{display:inline-flex;align-items:center;gap:8px;min-height:44px;color:var(--yy-sky)!important;font-size:13px;text-decoration:none;white-space:nowrap}
       .yy-site-link:hover{color:#fffaf2!important;text-decoration:underline}
@@ -266,9 +266,9 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'yy' }, h('style', null, CSS),
         h('header', { className: 'yy-masthead' }, h('div', { className: 'yy-shell' },
           h('div', { className: 'yy-brand-row' },
-            h('div', { className: 'yy-brand' }, h(Bird, { size: 46, seal: true }), h('div', null, h('h1', null, '燕子'), h('p', null, 'DSH 提示词工作台'))),
+            h('div', { className: 'yy-brand' }, h(Bird, { size: 46, seal: true }), h('div', null, h('h1', null, '破甲工作台'), h('p', null, '燕子 · DSH'))),
             h('a', { className: 'yy-site-link', href: SITE, target: '_blank', rel: 'noopener noreferrer' }, '燕语官网', h(Icon, { name: 'external', size: 15 }))),
-          h('div', { className: 'yy-intro' }, h('h2', null, '四只燕子，', h('span', null, '随心切换。')), h('p', null, '选择你的表达方式，下一次对话即刻启程。')))),
+          h('div', { className: 'yy-intro' }, h('h2', null, '把系统提示词，', h('span', null, '变成你的主场。')), h('p', null, '红黄蓝绿，一键切换。下一次请求，你的方案就位。')))),
         h('div', { className: 'yy-shell' },
           h('section', { 'aria-label': '提示词方案' },
             h('div', { className: 'yy-section-heading' }, h('div', null, h('h2', null, '选择你的燕子'), h('p', null, '四种方案，一次选择。')),
@@ -288,7 +288,7 @@ window.__ModuleLoader__.load({
         try { slots = ctx.get ? ctx.get('slots') : null; } catch { slots = null; }
         if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') { console.warn('[yanyu-purge] slots 服务不可用，面板未注册'); return; }
         const seats = [
-          ['sidebar.panellist', { name: 'sidebar.panellist', id: 'yanyu-purge', order: 24, label: () => '燕子' }, (props) => h(Bird, { size: props?.size || 20 })],
+          ['sidebar.panellist', { name: 'sidebar.panellist', id: 'yanyu-purge', order: 24, label: () => '破甲工作台' }, (props) => h(Bird, { size: props?.size || 20 })],
           ['main', { name: 'main', key: 'yanyu-purge' }, () => h(YanyuPanel)]
         ];
         for (const [slot, desc, render] of seats) {

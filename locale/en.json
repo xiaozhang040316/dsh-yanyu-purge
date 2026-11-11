@@ -1,12 +1,12 @@
 {
   "meta": {
-    "title": "Yanyu · Prompt Workspace",
-    "description": "Four swallow presets in red, yellow, blue and green, with live system-prompt injection status."
+    "title": "Yanyu · Pojia Workbench",
+    "description": "Make system prompts your own. Four swallow presets, system-prompt replacement or appending, local request verification, live status and light/dark themes for DSH."
   },
   "yanyuPurge": {
-    "nav": "Yanyu",
-    "title": "Yanyu",
-    "subtitle": "DSH Prompt Workspace",
+    "nav": "Pojia Workbench",
+    "title": "Pojia Workbench",
+    "subtitle": "Yanyu · DSH",
     "pill": "Live injection status",
     "schemeTitle": "Prompt Mode",
     "schemeNote": "Takes effect on the next request, no restart needed.",

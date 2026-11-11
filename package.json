@@ -1,7 +1,7 @@
 {
   "name": "@local/dsh-yanyu-purge",
-  "version": "1.3.0",
-  "description": "燕子 · DSH 提示词工作台：红、黄、蓝、绿四种方案切换，实时注入状态与燕语 FreeCoding 品牌界面。",
+  "version": "1.3.1",
+  "description": "燕子 · 破甲工作台｜把系统提示词，变成你的主场。红黄蓝绿四方案一键切换，支持 system 覆盖与追加、本地请求确认、动态状态与深浅主题。",
   "type": "module",
   "main": "index.js",
   "exports": {
