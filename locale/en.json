@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "title": "Yanyu · Prompt Workspace",
+    "description": "Four swallow presets in red, yellow, blue and green, with live system-prompt injection status."
+  },
+  "yanyuPurge": {
+    "nav": "Yanyu",
+    "title": "Yanyu",
+    "subtitle": "DSH Prompt Workspace",
+    "pill": "Live injection status",
+    "schemeTitle": "Prompt Mode",
+    "schemeNote": "Takes effect on the next request, no restart needed.",
+    "affTitle": "Relay",
+    "affDesc": "API relay and model access with stable routing.",
+    "affCta": "Open yanyuapi.com",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "joinTitle": "Group",
+    "joinDesc": "Updates and feedback via QQ group.",
+    "joinCta": "Join group"
+  }
+}

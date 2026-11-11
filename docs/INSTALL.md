@@ -1,0 +1,166 @@
+# 安装与使用教程
+
+燕子运行在 DeepSeek Harness（DSH）内。安装前先确认 DSH 可以正常打开，并能找到 **Plugins / 插件管理**。
+
+DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harness
+
+## 在线安装（推荐）
+
+在 DSH 的插件安装输入框粘贴：
+
+```text
+git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.0
+```
+
+这是固定到 `v1.3.0` 标签的 Git 包地址。等待安装完成，启用燕子；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
+
+也可以让 DSH 中已启用插件管理工具的会话执行：
+
+```text
+请使用 plugin_manager 安装组合包：
+action: install_bundle
+target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.0
+```
+
+下列路径是 ZIP 本地安装流程。
+
+## 1. 下载并解压
+
+打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.3.0.zip` 插件包，解压到一个固定目录。例如：
+
+```text
+C:\Tools\dsh-yanyu-purge
+```
+
+安装目标必须是**直接包含 `package.json` 的文件夹**，不是 ZIP 文件，也不是多套一层的父目录。目录内应至少有：
+
+```text
+dsh-yanyu-purge/
+├── package.json
+├── index.js
+├── client.js
+├── cordis.patch.yml
+├── icon.svg
+├── prompts/
+└── locale/
+```
+
+保留完整目录。不同 DSH 版本可能链接本地目录，也可能创建安装副本；保留源目录可以继续更新或重新安装。
+
+## 2. 安装到 DSH
+
+1. 打开 DSH 的 **Plugins / 插件管理**。
+2. 找到安装入口，选择本地目录安装，或在安装目标中填写解压目录的绝对路径。
+3. 提交安装，确认燕子插件处于启用状态。
+4. 若应用提示需要重启，重启 DSH；否则刷新或重新打开界面。
+5. 侧栏出现 **燕子**，点击打开工作台。
+
+包名是 `@local/dsh-yanyu-purge`，Host 插件名是 `dsh-yanyu-purge`。菜单文字可能随 DSH 版本变化，安装目标始终是包含 `package.json` 的目录。
+
+## 3. 选择一只燕子
+
+| 方案 | 用途侧重点 | 启动配置值 |
+|---|---|---|
+| 红燕子 | 中文表达 | `a` |
+| 黄燕子 | 英文表达 | `b` |
+| 蓝燕子 | 执行规范 | `c` |
+| 绿燕子 | 通道工作规范 | `d` |
+
+在面板中点击方案。保存完成后，该方案会在**下一次模型请求**生效，无需重启 DSH。当前方案由插件实例管理，同一宿主实例中的会话共享此选择。
+
+面板切换属于本次运行状态，不会写回启动配置。重载插件或重启 DSH 后，恢复为 `config.scheme` 指定的方案，默认红燕子。
+
+## 4. 确认提示词已进入请求
+
+1. 打开燕子面板，确认“面板已连接”。
+2. 选择需要的方案。
+3. 回到对话，发送一条新消息。
+4. 再看燕子面板，等待自动刷新。
+
+| 状态 | 下一步 |
+|---|---|
+| 已就绪，等待下一次请求 | 发送新消息，产生一次模型请求 |
+| 提示词已读取 | 已发生正文读取，等待本地请求确认 |
+| 系统提示词覆盖已确认 | 已匹配覆盖模式的本地 `system` 正文，查看最近确认时间 |
+| 系统提示词注入已确认 | 已匹配追加模式的本地 `system` 正文，查看最近确认时间 |
+| 状态暂未确认 | 点击“刷新状态”，检查插件是否启用 |
+
+仅打开面板不会发起模型请求，因此首次安装看到“等待下一次请求”是正常状态。成功记录属于当前方案与模式；更换方案后需要重新产生确认。它记录的是本地请求边界，不判断远端模型是否采纳这些内容。
+
+## 5. 覆盖、追加与默认方案
+
+新安装默认配置如下。请在 DSH 中该插件的配置位置调整，保存后按宿主提示重新加载：
+
+```yaml
+enabled: true
+mode: purge
+scheme: a
+suffix: ""
+order: 20000
+includeRuntimeContext: true
+```
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `enabled` | `true` | 是否启用 Host 提示词注册 |
+| `mode` | `purge` | `purge` 覆盖系统提示词段；`inject` 追加；`off` 停用 |
+| `scheme` | `a` | 插件启动时选中的方案 |
+| `suffix` | 空字符串 | 在方案正文后追加的自定义文本 |
+| `order` | `20000` | 提示词段的排序位置 |
+| `includeRuntimeContext` | `true` | 保留宿主运行时上下文；设为 `false` 时请求宿主抑制可选上下文 |
+
+已有安装若保存了 `mode: inject`，更新文件不会自动把它改成 `purge`。希望使用覆盖模式时，把现有配置的 `mode` 改为 `purge`，再重新加载。面板会显示实际运行模式。
+
+同一宿主只应启用一个使用 `complete` 的覆盖提示词插件。多个覆盖插件同时存在时，DSH 会报告 `multiple complete prompt sections`；停用其中一个，或将燕子设为 `inject` 后重新加载。
+
+## 6. 更新插件
+
+1. 下载新版本 ZIP，保留一份当前可用版本。
+2. 将新版完整解压到固定插件目录，包含 `prompts/` 和 `locale/`。
+3. 在 DSH 插件管理中重新安装该目录或重新加载插件。若宿主使用安装副本，仅覆盖下载目录不会自动更新运行副本。
+4. 按应用提示重启或刷新界面。
+5. 打开燕子，核对方案名称与运行模式；发送新消息，再检查确认记录。
+
+如果自己修改过提示词资源或配置，更新前单独保留这些改动，更新后再按需合并。
+
+## 7. 常见问题
+
+### 侧栏没有“燕子”
+
+检查插件是否已启用、安装目录是否直接包含 `package.json`，以及是否按提示完成重新加载。确认下载的是完整插件包，`client.js` 与 `icon.svg` 都在目录中。
+
+### 面板打开了，但一直连接失败
+
+检查 Host 插件是否启用、模式是否为 `off`。当前实现停用 Host 时也不会注册面板状态 API。将插件启用并重新加载后，再点击“刷新状态”。
+
+### 一直显示“提示词已读取”
+
+这表示正文提供函数运行过，但没有获得符合条件的本地请求确认。检查宿主版本是否提供 `llm/stream` 扩展点，以及是否还有其他插件改写系统提示词。反馈时附上实际状态与版本。
+
+### 更新后还是旧界面
+
+先核对 DSH 实际安装的是链接目录还是独立副本。重新安装新版目录，随后按提示重载或重启 DSH，再刷新界面。
+
+### 切换后重启又变回红燕子
+
+当前面板切换不持久化，重启会恢复 `config.scheme`。需要固定某个默认方案时修改该配置。
+
+### 如何停用或卸载
+
+在 DSH 插件管理中停用或移除 `@local/dsh-yanyu-purge`。插件通过宿主扩展接口注册提示词与面板，不修改 DSH 安装包。卸载后按宿主提示重新加载。
+
+## 交流与反馈
+
+- QQ 交流群：**740438905**
+- [点击加群](https://qm.qq.com/q/AgbEXUorUA)
+- [燕语 FreeCoding](https://yanyuapi.com/)
+- [GitHub Issues](https://github.com/xiaozhang040316/dsh-yanyu-purge/issues)
+
+反馈建议附上：DSH 版本、插件版本、安装方式、实际模式、面板状态，以及复现步骤。
+
+## 官方依据
+
+- [DSH 插件管理与本地/Git 安装](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/plugin-manager/README.zh.md)
+- [DSH 插件索引与 Git 安装 spec](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.zh.md)
+
+Release 同时提供 `.tgz` 包与 `SHA256SUMS.txt`。普通桌面用户优先使用 Git 安装或 ZIP 解压安装。

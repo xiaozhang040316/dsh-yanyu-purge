@@ -1,0 +1,25 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = name => fs.readFileSync(path.join(root, name), 'utf8');
+const pkg = JSON.parse(read('package.json'));
+assert.equal(pkg.name, '@local/dsh-yanyu-purge');
+assert.equal(pkg.license, 'MIT');
+assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
+assert.ok(!pkg.private, 'Public plugin discovery requires a non-private package');
+for (const file of ['index.js', 'client.js']) execFileSync(process.execPath, ['--check', path.join(root, file)]);
+for (const locale of ['zh', 'en']) JSON.parse(read(`locale/${locale}.json`));
+const host = read('index.js');
+const files = [...host.matchAll(/file: "([^"]+\.txt)"/g)].map(match => match[1]);
+assert.equal(files.length, 4);
+for (const file of files) assert.ok(read(`prompts/${file}`).trim().length > 0, `Missing prompt resource: ${file}`);
+assert.match(read('cordis.patch.yml'), /mode:\s*purge/);
+assert.match(read('icon.svg'), /<svg[\s>]/);
+assert.match(read('README.md'), /docs\/INSTALL\.md/);
+assert.match(read('docs/INSTALL.md'), new RegExp(`#v${pkg.version.replaceAll('.', '\\.')}`));
+assert.ok(!read('README.md').includes('{{REPO_URL}}'));
+console.log('CHECK PASS: syntax, manifest, four UTF-8 resources, locale JSON, default mode and documentation');

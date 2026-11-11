@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "title": "燕子 · 提示词工作台",
+    "description": "红燕子、黄燕子、蓝燕子、绿燕子四种方案，实时查看系统提示词注入状态。"
+  },
+  "yanyuPurge": {
+    "nav": "燕子",
+    "title": "燕子",
+    "subtitle": "DSH 提示词工作台",
+    "pill": "实时注入状态",
+    "schemeTitle": "提示词模式",
+    "schemeNote": "切换后下一请求生效，无需重启。",
+    "affTitle": "中转站",
+    "affDesc": "API 中转与模型接入，稳定分流。",
+    "affCta": "打开 yanyuapi.com",
+    "copy": "复制链接",
+    "copied": "已复制",
+    "joinTitle": "交流群",
+    "joinDesc": "更新与反馈走 QQ 群。",
+    "joinCta": "点击加群"
+  }
+}

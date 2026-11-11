@@ -1,0 +1,7 @@
+- insert:
+    - id: dsh-yanyu-purge
+      name: '@local/dsh-yanyu-purge'
+      config:
+        enabled: true
+        mode: purge
+        scheme: a
