@@ -9,24 +9,24 @@ DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harnes
 在 DSH 的插件安装输入框粘贴：
 
 ```text
-git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.1
+git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.0
 ```
 
-这是固定到 `v1.3.1` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
+这是固定到 `v1.4.0` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
 
 也可以让 DSH 中已启用插件管理工具的会话执行：
 
 ```text
 请使用 plugin_manager 安装组合包：
 action: install_bundle
-target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.3.1
+target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.0
 ```
 
 下列路径是 ZIP 本地安装流程。
 
 ## 1. 下载并解压
 
-打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.3.1.zip` 插件包，解压到一个固定目录。例如：
+打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.4.0.zip` 插件包，解压到一个固定目录。例如：
 
 ```text
 C:\Tools\dsh-yanyu-purge
@@ -38,6 +38,7 @@ C:\Tools\dsh-yanyu-purge
 dsh-yanyu-purge/
 ├── package.json
 ├── index.js
+├── balance.js
 ├── client.js
 ├── cordis.patch.yml
 ├── icon.svg
@@ -102,8 +103,8 @@ includeRuntimeContext: true
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `enabled` | `true` | 是否启用 Host 提示词注册 |
-| `mode` | `purge` | `purge` 覆盖系统提示词段；`inject` 追加；`off` 停用 |
+| `enabled` | `true` | 启动时是否启用提示词注入；关闭时仍保留账户与面板 API |
+| `mode` | `purge` | `purge` 覆盖系统提示词段；`inject` 追加；`off` 启动时关闭注入 |
 | `scheme` | `a` | 插件启动时选中的方案 |
 | `suffix` | 空字符串 | 在方案正文后追加的自定义文本 |
 | `order` | `20000` | 提示词段的排序位置 |
@@ -112,6 +113,24 @@ includeRuntimeContext: true
 已有安装若保存了 `mode: inject`，更新文件不会自动把它改成 `purge`。希望使用覆盖模式时，把现有配置的 `mode` 改为 `purge`，再重新加载。面板会显示实际运行模式。
 
 同一宿主只应启用一个使用 `complete` 的覆盖提示词插件。多个覆盖插件同时存在时，DSH 会报告 `multiple complete prompt sections`；停用其中一个，或将破甲工作台设为 `inject` 后重新加载。
+
+## 提示词总开关
+
+工作台顶部的 **提示词注入** 开关控制本插件是否注册提示词段。关闭后显示 **已关闭**，新请求恢复使用其他启用的宿主提示词；打开后重新注册当前方案。已有请求不受追溯修改。
+
+关闭期间仍可选择方案、登录燕语和查询余额。开关为本次运行状态，重载后恢复启动配置。希望默认关闭时设置 `enabled: false`；`mode: off` 也会以关闭状态启动，手动打开后使用覆盖模式。
+
+## 燕语登录与余额浮窗
+
+1. 在工作台的 **燕语余额** 区输入自己的邮箱和密码，点击 **登录并查询**。
+2. 开启动态验证的账户按提示输入六位验证码。
+3. 打开一个已有对话，在输入框下方找到 **燕语余额**，点击展开余额浮窗。
+4. 查看美元余额与最近更新时间，或点击 **刷新余额**；按 Esc、点击外部或“收起”可关闭浮窗。
+5. 在浮窗或工作台点击 **退出登录**，会立即清除本地会话。
+
+页面可见时每 15 秒检查，隐藏时暂停；遇到限流会延后重试。金额取自燕语账户接口，网络异常时保留上次结果并显示待更新，不将查询失败显示为 0。
+
+密码不保存，访问令牌与刷新令牌仅在本机 Host 内存中保存，互不共享的浏览器会话分别登录。页面刷新可保持登录；重载插件、重启 DSH 或会话过期后重新登录。余额浮窗只出现在已有聊天的输入区；空白首页可先从工作台登录。
 
 ## 6. 更新插件
 
@@ -131,7 +150,7 @@ includeRuntimeContext: true
 
 ### 面板打开了，但一直连接失败
 
-检查 Host 插件是否启用、模式是否为 `off`。当前实现停用 Host 时也不会注册面板状态 API。将插件启用并重新加载后，再点击“刷新状态”。
+检查破甲工作台插件是否在 DSH 插件管理中启用，并确认 Host 与 Client 来自同一版本。提示词总开关关闭或 `mode: off` 不会关闭状态与余额接口；重新加载插件后再点击“刷新状态”。
 
 ### 一直显示“提示词已读取”
 

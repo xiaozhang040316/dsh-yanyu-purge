@@ -3,6 +3,7 @@ window.__ModuleLoader__.load({
   id: '@local/dsh-yanyu-purge',
   factory: (require) => {
     const React = require('react');
+    const { createPortal } = require('react-dom');
     const h = React.createElement;
     const { useState, useEffect, useRef, useId } = React;
     const API = '/plugins/yanyu-purge/api';
@@ -95,6 +96,15 @@ window.__ModuleLoader__.load({
       .yy-radio-mark{width:19px;height:19px;border:1px solid var(--yy-muted);border-radius:50%;display:grid;place-items:center;flex:none}
       .yy-choice[data-selected="true"] .yy-radio-mark{background:var(--yy-seal);border-color:var(--yy-seal);color:#fff}
       .yy-selection-note{margin-top:14px!important;color:var(--yy-muted);font-size:12px}
+      .yy-master{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:22px;margin-bottom:24px;border-bottom:1px solid var(--yy-line)}
+      .yy-master h2{font:700 20px/1.4 var(--yy-serif)}
+      .yy-master p{font-size:12px;color:var(--yy-muted);margin-top:5px}
+      .yy-master-switch{display:inline-flex;align-items:center;gap:9px;flex:none;border:0;background:transparent;color:var(--yy-ink);padding:8px 0;cursor:pointer;font-size:13px!important}
+      .yy-master-switch:disabled{opacity:.6;cursor:wait}
+      .yy-switch-track{display:block;width:38px;height:22px;border-radius:12px;background:var(--yy-muted);padding:3px}
+      .yy-switch-track::after{content:"";display:block;width:16px;height:16px;border-radius:50%;background:var(--yy-paper)}
+      .yy-master-switch[aria-checked="true"] .yy-switch-track{background:var(--yy-seal)}
+      .yy-master-switch[aria-checked="true"] .yy-switch-track::after{transform:translateX(16px);background:#fff}
       .yy-error{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:16px;padding:14px 16px;border:1px solid var(--yy-accent-ink);border-radius:10px;background:var(--yy-tint);font-size:13px}
       .yy-retry{border:0;background:transparent;color:var(--yy-accent-ink);font-weight:650!important;text-decoration:underline;text-underline-offset:4px;cursor:pointer;padding:8px;min-height:40px}
       .yy-retry:disabled{opacity:.6;cursor:wait}
@@ -165,6 +175,7 @@ window.__ModuleLoader__.load({
       let title = '正在读取注入状态';
       let description = '状态由插件实际运行结果更新。';
       if (error) { title = '状态暂未确认'; description = '重新连接后，将继续更新实际注入状态。'; }
+      else if (state?.enabled === false || state?.mode === 'off') { title = '提示词注入已关闭'; description = '本插件不再向新请求注入提示词；余额查询继续可用。'; }
       else if (state && !info) { title = '运行状态待验证'; description = '当前插件尚未返回注入记录，请更新插件后刷新。'; }
       else if (assembled) { title = state.mode === 'purge' ? '系统提示词覆盖已确认' : '系统提示词注入已确认'; description = '最近确认记录：本地模型请求的 system 已包含当前燕子。'; }
       else if (evaluated) { title = '提示词已读取'; description = '宿主已读取当前方案，等待最终系统提示词确认。'; }
@@ -212,6 +223,187 @@ window.__ModuleLoader__.load({
         h('p', { className: 'yy-address' }, SITE),
         h('div', { className: 'yy-copy-feedback', role: 'status', 'aria-live': 'polite' }, status === 'error' ? '复制失败，请选择上方链接手动复制。' : status === 'done' ? '链接已复制到剪贴板。' : ''));
     }
+    const BALANCE_CSS = `
+      .yy-account,.yy-balance-dock,.yy-balance-popover{--yb-bg:var(--dsw-alias-bg-layer-1,#fcfaf7);--yb-ink:var(--dsw-alias-label-primary,#252b32);--yb-muted:var(--dsw-alias-label-secondary,#676c74);--yb-line:var(--dsw-alias-border-l1,#e0ded9);color:var(--yb-ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;text-align:left;box-sizing:border-box}
+      .yy-account *,.yy-balance-dock *{box-sizing:border-box}
+      .yy-account{padding:22px 0;margin-top:28px;border-top:1px solid var(--yb-line)}
+      .yy-account h2,.yy-account p,.yy-balance-dock h2,.yy-balance-dock p{margin:0}
+      .yy-account h2,.yy-balance-dock h2{font-size:17px;font-weight:650;line-height:1.4}
+      .yy-account-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+      .yy-account-note{font-size:12px;color:var(--yb-muted);margin-top:5px!important;overflow-wrap:anywhere}
+      .yy-account-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:12px;margin-top:16px}
+      .yy-account-form label{display:grid;gap:6px;min-width:0;font-size:13px;font-weight:500}
+      .yy-account-form input{display:block;width:100%;min-width:0;min-height:42px;border:1px solid var(--yb-line);border-radius:8px;background:var(--yb-bg);color:var(--yb-ink);font:inherit;font-size:16px;line-height:1.4;padding:9px 11px}
+      .yy-account-form input:focus{outline:2px solid #bf3623;outline-offset:2px}
+      .yy-account-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+      .yy-account-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:8px 12px;border:1px solid var(--yb-line);border-radius:8px;background:var(--yb-bg);color:var(--yb-ink);cursor:pointer;font:500 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;text-decoration:none}
+      .yy-account-btn:hover{border-color:var(--yb-muted)}
+      .yy-account-btn[data-primary="true"]{background:#bf3623;color:#fff;border-color:#bf3623}
+      .yy-account-btn[data-primary="true"]:hover{background:#a92b1b;border-color:#a92b1b}
+      .yy-account-btn:disabled{opacity:.6;cursor:wait}
+      .yy-account-btn:focus-visible,.yy-balance-trigger:focus-visible{outline:2px solid #bf3623;outline-offset:3px}
+      .yy-account-overview{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+      .yy-account-amount{display:block;font-size:28px;font-weight:650;line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+      .yy-account-amount small{font-size:12px;color:var(--yb-muted);font-weight:400;margin-left:8px}
+      .yy-account-feedback{margin-top:12px!important;font-size:12px;color:var(--yb-muted);overflow-wrap:anywhere}
+      .yy-account-feedback[role="alert"]{color:var(--yb-ink)}
+      .yy-balance-dock{position:relative;display:inline-flex;max-width:100%;min-width:0}
+      .yy-balance-trigger{display:inline-flex;align-items:center;gap:7px;max-width:100%;min-height:30px;padding:4px 10px;border:1px solid var(--yb-line);border-radius:7px;background:var(--yb-bg);color:var(--yb-muted);font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;cursor:pointer;font-variant-numeric:tabular-nums}
+      .yy-balance-trigger strong{color:var(--yb-ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .yy-balance-trigger svg{flex:none}
+      .yy-balance-mark{width:6px;height:6px;border-radius:50%;background:var(--yb-muted);flex:none}
+      .yy-balance-mark[data-ready="true"]{background:#2c7b60}
+      .yy-balance-popover{position:fixed;z-index:2000;width:350px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;background:var(--yb-bg);border:1px solid var(--yb-line);border-radius:12px}
+      .yy-balance-popover .yy-account-form{grid-template-columns:1fr}
+      .yy-balance-popover .yy-account-overview{display:block}
+      .yy-balance-popover .yy-account-actions{margin-top:14px}
+      .yy-balance-popover .yy-account{padding:0;margin:0;border:0}
+      .yy-account-titleline{display:flex;align-items:center;gap:8px;min-width:0}
+      .yy-account .yy-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+      .yy-balance-popover h2,.yy-balance-popover p{margin:0}
+      .yy-balance-popover h2{font-size:17px;font-weight:650;line-height:1.4}
+      @container yy-panel (max-width:600px){.yy-account-form{grid-template-columns:1fr}.yy-account-overview{align-items:flex-start}.yy-account-actions{gap:6px}}
+      @media(max-height:520px){.yy-balance-popover{max-height:calc(100dvh - 24px)}}
+    `;
+
+    // One local store is shared by the workbench and conversation dock. Auth tokens stay on the host.
+    const accountStore = (() => {
+      let snapshot = { data: null, busy: '', error: '' };
+      let active = null;
+      let timer = null;
+      const listeners = new Set();
+      const publish = (patch) => { snapshot = { ...snapshot, ...patch }; for (const fn of listeners) fn(snapshot); };
+      const schedule = () => {
+        clearTimeout(timer);
+        if (listeners.size) timer = setTimeout(tick, Math.max(15000, snapshot.data?.refreshAfterMs || 0, snapshot.error ? 30000 : 0));
+      };
+      async function run(action = '', body) {
+        if (active) {
+          if (action && active.action === '') active.abort(); else return false;
+        }
+        clearTimeout(timer);
+        const controller = new AbortController();
+        controller.action = action;
+        active = controller;
+        publish({ busy: action || 'read', error: '' });
+        const timeout = setTimeout(() => controller.abort('timeout'), 20000);
+        try {
+          const response = await fetch(`${API}/account${action ? '/' + action : ''}`, {
+            method: action ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+            headers: { 'x-yanyu-client': '1', ...(action ? { 'content-type': 'application/json' } : {}) },
+            ...(action ? { body: JSON.stringify(body || {}) } : {})
+          });
+          let wire;
+          try { wire = await response.json(); } catch { throw new Error('余额服务暂时没有响应，请稍后重试。'); }
+          if (!response.ok || wire?.ok !== true) throw new Error(wire?.error?.message || '操作未完成，请稍后重试。');
+          const data = wire.value;
+          if (!data || !['signed_out', 'signed_in', 'two_factor', 'expired'].includes(data.status) || typeof data.authenticated !== 'boolean') throw new Error('余额状态格式异常，请刷新后重试。');
+          if (data.balance !== null && (typeof data.balance !== 'number' || !Number.isFinite(data.balance))) throw new Error('余额格式异常，请稍后刷新。');
+          if (active !== controller) return false;
+          publish({ data, error: '' });
+          return true;
+        } catch (error) {
+          if (active === controller && listeners.size) publish({ data: snapshot.data?.authenticated ? { ...snapshot.data, stale: true } : snapshot.data, error: controller.signal.aborted ? '请求超时，请稍后重试。' : error instanceof TypeError ? '连接中断，当前显示上次余额。' : error.message });
+          return false;
+        } finally {
+          clearTimeout(timeout);
+          if (active === controller) { active = null; publish({ busy: '' }); schedule(); }
+        }
+      }
+      function tick() { if (!document.hidden) run(); else schedule(); }
+      function visible() { if (!document.hidden) run(); }
+      return {
+        read: () => snapshot, run,
+        subscribe(fn) {
+          listeners.add(fn);
+          if (listeners.size === 1) { document.addEventListener('visibilitychange', visible); window.addEventListener('focus', visible); run(); }
+          return () => {
+            listeners.delete(fn);
+            if (!listeners.size) { clearTimeout(timer); document.removeEventListener('visibilitychange', visible); window.removeEventListener('focus', visible); const prior = active; active = null; prior?.abort(); snapshot = { ...snapshot, busy: '' }; }
+          };
+        }
+      };
+    })();
+    function useAccount() {
+      const [value, setValue] = useState(accountStore.read);
+      useEffect(() => { const dispose = accountStore.subscribe(setValue); setValue(accountStore.read()); return dispose; }, []);
+      return value;
+    }
+    const money = (value) => typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(value) : '—';
+    function AccountCard({ account, compact = false }) {
+      const { data, busy, error } = account;
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [code, setCode] = useState('');
+      const id = useId();
+      const twoFactor = data?.status === 'two_factor';
+      const submit = (event) => {
+        event.preventDefault();
+        if (busy) return;
+        if (twoFactor) { const value = code; setCode(''); accountStore.run('2fa', { code: value }); }
+        else { const value = password; setPassword(''); accountStore.run('login', { email: email.trim(), password: value }); }
+      };
+      const time = data?.updatedAt ? new Date(data.updatedAt) : null;
+      const updated = time && Number.isFinite(time.getTime()) ? time.toLocaleTimeString('zh-CN', { hour12: false }) : '';
+      return h('section', { className: 'yy-account', 'aria-label': '燕语账号与余额' },
+        h('style', null, BALANCE_CSS),
+        !compact ? h('div', { className: 'yy-account-head' }, h('div', { className: 'yy-account-titleline' }, h(Bird, { size: 24, color: '#bf3623' }), h('h2', null, '燕语余额')), h('a', { className: 'yy-account-btn', href: `${SITE}dashboard`, target: '_blank', rel: 'noopener noreferrer' }, '官网控制台', h(Icon, { name: 'external' }))) : null,
+        data?.authenticated ? h('div', null,
+          h('div', { className: 'yy-account-overview' }, h('div', null,
+            h('p', { className: 'yy-account-note' }, data.emailMasked || data.displayName || '已登录燕语'),
+            h('strong', { className: 'yy-account-amount' }, money(data.balance), h('small', null, 'USD')),
+            h('p', { className: 'yy-account-note' }, updated ? `最近更新 ${updated} · 每 15 秒检查` : '余额等待更新')),
+            h('div', { className: 'yy-account-actions' },
+              h('button', { type: 'button', className: 'yy-account-btn', disabled: Boolean(busy), onClick: () => accountStore.run('refresh') }, busy === 'refresh' ? '刷新中…' : '刷新余额'),
+              h('button', { type: 'button', className: 'yy-account-btn', disabled: Boolean(busy), onClick: () => accountStore.run('logout') }, busy === 'logout' ? '退出中…' : '退出登录'))))
+          : h('div', null,
+            h('p', { className: 'yy-account-note' }, twoFactor ? '输入验证器中的 6 位验证码，完成登录。' : '登录后，在对话框下方随时查看余额。'),
+            h('form', { className: 'yy-account-form', onSubmit: submit },
+              twoFactor ? h('label', { htmlFor: `${id}-code` }, '动态验证码', h('input', { id: `${id}-code`, type: 'text', inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]{6}', maxLength: 6, required: true, value: code, onChange: (e) => setCode(e.target.value), disabled: Boolean(busy) })) : h(React.Fragment, null,
+                h('label', { htmlFor: `${id}-email` }, '邮箱', h('input', { id: `${id}-email`, type: 'email', name: 'email', autoComplete: 'username', maxLength: 254, required: true, value: email, onChange: (e) => setEmail(e.target.value), disabled: Boolean(busy) })),
+                h('label', { htmlFor: `${id}-password` }, '密码', h('input', { id: `${id}-password`, type: 'password', name: 'password', autoComplete: 'current-password', maxLength: 256, required: true, value: password, onChange: (e) => setPassword(e.target.value), disabled: Boolean(busy) }))),
+              h('button', { type: 'submit', className: 'yy-account-btn', 'data-primary': true, disabled: Boolean(busy) }, busy === 'login' || busy === '2fa' ? '正在登录…' : twoFactor ? '验证并登录' : '登录并查询')),
+            twoFactor ? h('button', { type: 'button', className: 'yy-account-btn', disabled: Boolean(busy), onClick: () => accountStore.run('logout') }, '返回邮箱登录') : null,
+            h('p', { className: 'yy-account-note' }, '密码仅用于登录；重载插件后需重新登录。')),
+        error || data?.message ? h('p', { className: 'yy-account-feedback', role: 'alert' }, error || data.message) : null,
+        h('span', { className: 'yy-sr', role: 'status', 'aria-live': 'polite' }, busy === 'login' ? '正在登录燕语' : data?.authenticated ? '燕语账号已登录' : ''));
+    }
+    function BalanceDock() {
+      const account = useAccount();
+      const [open, setOpen] = useState(false);
+      const [position, setPosition] = useState({ left: 12, top: 12 });
+      const dock = useRef(null);
+      const trigger = useRef(null);
+      const popover = useRef(null);
+      const id = useId();
+      useEffect(() => {
+        if (!open) return;
+        const place = () => {
+          const button = trigger.current?.getBoundingClientRect();
+          const box = popover.current?.getBoundingClientRect();
+          if (!button || !box) return;
+          setPosition({ left: Math.max(12, Math.min(window.innerWidth - box.width - 12, button.left)), top: Math.max(12, Math.min(window.innerHeight - box.height - 12, button.top - box.height - 8)) });
+        };
+        const outside = (event) => { if (!dock.current?.contains(event.target) && !popover.current?.contains(event.target)) setOpen(false); };
+        const escape = (event) => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+        if (popover.current) observer?.observe(popover.current);
+        place();
+        popover.current?.querySelector('input,button')?.focus({ preventScroll: true });
+        window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
+        document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
+        return () => { observer?.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+      }, [open]);
+      const data = account.data;
+      const ready = data?.authenticated && !data.stale && !account.error;
+      return h('div', { className: 'yy-balance-dock', ref: dock }, h('style', null, BALANCE_CSS),
+        h('button', { className: 'yy-balance-trigger', type: 'button', ref: trigger, onClick: () => setOpen(!open), 'aria-expanded': open, 'aria-controls': open ? id : undefined, 'aria-label': data?.authenticated ? `燕语余额 ${money(data.balance)}，打开账号面板` : '登录燕语查看余额' },
+          h(Bird, { size: 16 }), h('span', null, '燕语余额'), h('strong', null, data?.authenticated ? money(data.balance) : '登录查询'), h('span', { className: 'yy-balance-mark', 'data-ready': ready, 'aria-hidden': true }), data?.authenticated && !ready ? h('span', null, '待更新') : null),
+        open ? createPortal(h('div', { className: 'yy-balance-popover', id, ref: popover, role: 'region', 'aria-label': '燕语余额浮窗', style: position },
+          h('div', { className: 'yy-account-head' }, h('h2', null, '燕语余额'), h('button', { type: 'button', className: 'yy-account-btn', onClick: () => { setOpen(false); trigger.current?.focus(); }, 'aria-label': '收起余额浮窗' }, '收起')),
+          h(AccountCard, { account, compact: true })), document.body) : null);
+    }
+    function AccountPanel() { return h(AccountCard, { account: useAccount() }); }
     function YanyuPanel() {
       const [state, setState] = useState(null);
       const [loading, setLoading] = useState(true);
@@ -222,25 +414,27 @@ window.__ModuleLoader__.load({
       const knownState = useRef(null);
       const restoreFocus = useRef(null);
       const refresh = async (next, quiet = false) => {
+        const changing = next !== undefined;
+        const operation = typeof next === 'boolean' ? 'enabled' : next ? 'scheme' : 'state';
         if (request.current) {
           // A user choice takes precedence over an in-flight background read.
-          if (next && request.current.operation === 'state') request.current.abort();
+          if (changing && request.current.operation === 'state') request.current.abort();
           else return;
         }
         const controller = new AbortController();
-        controller.operation = next ? 'scheme' : 'state';
+        controller.operation = operation;
         request.current = controller;
-        if (next && document.activeElement?.matches('input[type="radio"]')) restoreFocus.current = document.activeElement;
-        if (next) setPending(next); else if (!quiet) setLoading(true);
+        if (changing && document.activeElement?.matches('input[type="radio"],.yy-master-switch')) restoreFocus.current = document.activeElement;
+        if (changing) setPending(operation === 'enabled' ? 'enabled' : next); else if (!quiet) setLoading(true);
         try {
-          const value = await api(next ? 'scheme' : 'state', next ? { scheme: next } : undefined, controller.signal);
+          const value = await api(operation, operation === 'enabled' ? { enabled: next } : next ? { scheme: next } : undefined, controller.signal);
           if (!alive.current || request.current !== controller) return;
           knownState.current = value;
           setState(value);
           setError('');
         } catch (err) {
           if (alive.current && request.current === controller && err.name !== 'AbortError') {
-            setError(next ? '切换尚未确认，请刷新状态后重试。' : (err instanceof TypeError ? '连接暂时中断，请重试。' : err.message || '连接暂时中断，请重试。'));
+            setError(changing ? '切换尚未确认，请刷新状态后重试。' : (err instanceof TypeError ? '连接暂时中断，请重试。' : err.message || '连接暂时中断，请重试。'));
           }
         } finally {
           if (request.current === controller) {
@@ -270,6 +464,10 @@ window.__ModuleLoader__.load({
             h('a', { className: 'yy-site-link', href: SITE, target: '_blank', rel: 'noopener noreferrer' }, '燕语官网', h(Icon, { name: 'external', size: 15 }))),
           h('div', { className: 'yy-intro' }, h('h2', null, '把系统提示词，', h('span', null, '变成你的主场。')), h('p', null, '红黄蓝绿，一键切换。下一次请求，你的方案就位。')))),
         h('div', { className: 'yy-shell' },
+          h('section', { className: 'yy-master', 'aria-label': '提示词注入总开关' },
+            h('div', null, h('h2', null, '提示词注入'), h('p', null, '切换后下一次请求生效；重载后按启动配置恢复。')),
+            h('button', { type: 'button', role: 'switch', className: 'yy-master-switch', 'aria-label': '提示词注入总开关', 'aria-checked': Boolean(state && state.enabled !== false && state.mode !== 'off'), disabled: !state || loading || Boolean(pending) || Boolean(error), onClick: () => refresh(state.enabled === false || state.mode === 'off') },
+              h('span', { className: 'yy-switch-track', 'aria-hidden': true }), pending === 'enabled' ? '切换中…' : state ? state.enabled === false || state.mode === 'off' ? '已关闭' : '已开启' : '读取中')),
           h('section', { 'aria-label': '提示词方案' },
             h('div', { className: 'yy-section-heading' }, h('div', null, h('h2', null, '选择你的燕子'), h('p', null, '四种方案，一次选择。')),
               h('span', { className: 'yy-connection', 'data-online': Boolean(state && !error), role: 'status' }, h('span', { className: 'yy-dot', 'aria-hidden': true }), loading ? '正在连接' : error ? '连接待确认' : '面板已连接')),
@@ -277,6 +475,7 @@ window.__ModuleLoader__.load({
             h('p', { className: 'yy-selection-note' }, pending ? '正在保存选择…' : '切换后下一次请求生效，无需重启。'),
             error ? h('div', { className: 'yy-error', role: 'alert' }, h('span', null, error), h('button', { type: 'button', className: 'yy-retry', disabled: loading, onClick: () => refresh() }, loading ? '正在刷新…' : '刷新状态')) : null,
             h(InjectionStatus, { state, error })),
+          h(AccountPanel),
           h('div', { className: 'yy-links' }, h(RelayCard),
             h('section', { className: 'yy-community' }, h('h2', null, '交流与反馈'), h('p', null, '插件更新、使用交流，或是一个新想法，都可以来群里聊聊。'), h('p', { className: 'yy-group-number' }, 'QQ 交流群 · 740438905'), h('a', { className: 'yy-join', href: GROUP, target: '_blank', rel: 'noopener noreferrer' }, '加入交流群', h(Icon, { name: 'arrow' })))),
           h('footer', { className: 'yy-footer' }, h('span', null, '燕语 FreeCoding'), h('span', null, '一语即达，自在编码'))));
@@ -289,7 +488,8 @@ window.__ModuleLoader__.load({
         if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') { console.warn('[yanyu-purge] slots 服务不可用，面板未注册'); return; }
         const seats = [
           ['sidebar.panellist', { name: 'sidebar.panellist', id: 'yanyu-purge', order: 24, label: () => '破甲工作台' }, (props) => h(Bird, { size: props?.size || 20 })],
-          ['main', { name: 'main', key: 'yanyu-purge' }, () => h(YanyuPanel)]
+          ['main', { name: 'main', key: 'yanyu-purge' }, () => h(YanyuPanel)],
+          ['conversation.composer.dock', { name: 'conversation.composer.dock', id: 'yanyu.balance', order: 20 }, () => h(BalanceDock)]
         ];
         for (const [slot, desc, render] of seats) {
           try { ctx.effect(() => slots.inject(slot, () => slots.register(desc, render)), `yanyu-purge: ${slot}`); }

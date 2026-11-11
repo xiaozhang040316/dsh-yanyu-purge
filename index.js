@@ -2,6 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createBalanceService } from "./balance.js";
 
 /** Cordis plugin name; shown in the plugin inventory. */
 const name = "dsh-yanyu-purge";
@@ -85,6 +86,8 @@ async function readJson(req) {
 }
 
 function attachApi(ctx, log, state) {
+  const balance = createBalanceService();
+  ctx.effect(() => () => balance.dispose(), "dsh-yanyu-purge.balance");
   const handle = async (req, res) => {
     let url;
     try {
@@ -97,6 +100,10 @@ function attachApi(ctx, log, state) {
     const method = (req.method ?? "GET").toUpperCase();
 
     try {
+      if (path === "/account" || path.startsWith("/account/")) {
+        await balance.handle(req, res, path, method);
+        return;
+      }
       if (method === "GET" && (path === "/" || path === "/ping")) {
         sendJson(res, 200, { ok: true, value: { pong: true, prefix: ROUTE_PREFIX } });
         return;
@@ -114,6 +121,17 @@ function attachApi(ctx, log, state) {
         }
         state.setScheme(next);
         log(`scheme -> ${next}`);
+        sendJson(res, 200, { ok: true, value: state.snapshot() });
+        return;
+      }
+      if (method === "POST" && path === "/enabled") {
+        const body = await readJson(req);
+        if (typeof body?.enabled !== "boolean") {
+          sendJson(res, 400, { ok: false, error: { message: "enabled 必须是布尔值" } });
+          return;
+        }
+        state.setEnabled(body.enabled);
+        log(`enabled -> ${body.enabled}`);
         sendJson(res, 200, { ok: true, value: state.snapshot() });
         return;
       }
@@ -184,8 +202,13 @@ function loadPrompts(log) {
 }
 
 function apply(ctx, config) {
-  const mode = resolveMode(config.mode ?? "purge");
-  if (!(config.enabled ?? true) || mode === "off") return;
+  const initialMode = resolveMode(config.mode ?? "purge");
+  const mode = initialMode === "off" ? "purge" : initialMode;
+  const initiallyEnabled = (config.enabled ?? true) && initialMode !== "off";
+  let enabled = false;
+  let disposed = false;
+  let sectionDispose = null;
+  let contextDispose = null;
 
   const logger = ctx.logger ?? console;
   const log = (msg) => (typeof logger.info === "function" ? logger.info(msg) : console.error(msg));
@@ -206,7 +229,15 @@ function apply(ctx, config) {
     evidenceSource: "llm/stream"
   };
 
-  log(`apply mode=${mode} complete=${mode === "purge"} scheme=${activeScheme} order=${config.order ?? 20000}`);
+  log(`apply mode=${initiallyEnabled ? mode : "off"} complete=${initiallyEnabled && mode === "purge"} scheme=${activeScheme} order=${config.order ?? 20000}`);
+
+  const clearEvidence = () => {
+    Object.assign(injection, {
+      proof: "registered", evaluations: 0, confirmations: 0,
+      lastEvaluatedAt: null, lastEvaluatedScheme: null,
+      lastAssembledAt: null, lastAssembledScheme: null, lastAssembledMode: null
+    });
+  };
 
   const schemeList = () => Object.entries(SCHEMES).map(([id, s]) => ({
     id,
@@ -215,16 +246,12 @@ function apply(ctx, config) {
   }));
 
   const state = {
-    snapshot: () => ({ scheme: activeScheme, schemes: schemeList(), mode, injection: { ...injection } }),
+    snapshot: () => ({ scheme: activeScheme, schemes: schemeList(), enabled, mode: enabled ? mode : "off", configuredMode: mode, injection: { ...injection } }),
+    setEnabled,
     setScheme: (next) => {
       if (activeScheme === next) return;
       activeScheme = next;
-      injection.proof = "registered";
-      injection.lastEvaluatedAt = null;
-      injection.lastEvaluatedScheme = null;
-      injection.lastAssembledAt = null;
-      injection.lastAssembledScheme = null;
-      injection.lastAssembledMode = null;
+      clearEvidence();
       ctx.emit?.("system-prompt/change");
     }
   };
@@ -236,26 +263,59 @@ function apply(ctx, config) {
     return parts.join("\n\n");
   };
 
+  function unregister() {
+    const removeSection = sectionDispose;
+    const restoreContext = contextDispose;
+    sectionDispose = null;
+    contextDispose = null;
+    injection.registered = false;
+    try { if (typeof removeSection === "function") removeSection(); }
+    finally { if (typeof restoreContext === "function") restoreContext(); }
+  }
+
+  function setEnabled(next) {
+    if (disposed || enabled === next) return;
+    clearEvidence();
+    if (!next) {
+      enabled = false;
+      unregister();
+      ctx.emit?.("system-prompt/change");
+      return;
+    }
+    try {
+      sectionDispose = ctx.systemPrompt.section({
+        name: SECTION_NAME,
+        order: config.order ?? 20000,
+        // Prompt files are literal text, including any {{...}} examples.
+        interpolate: false,
+        text: () => {
+          if (!enabled) return "";
+          injection.evaluations++;
+          injection.lastEvaluatedAt = new Date().toISOString();
+          injection.lastEvaluatedScheme = activeScheme;
+          if (injection.proof !== "assembled") injection.proof = "evaluated";
+          return bodyFor();
+        },
+        ...(mode === "purge" ? { complete: true } : {})
+      });
+      if (!(config.includeRuntimeContext ?? true)) contextDispose = ctx.systemPrompt.suppressRuntimeContext();
+      enabled = true;
+      injection.registered = true;
+      ctx.emit?.("system-prompt/change");
+    } catch (error) {
+      enabled = false;
+      unregister();
+      throw error;
+    }
+  }
+
   ctx.effect(() => {
-    const dispose = ctx.systemPrompt.section({
-      name: SECTION_NAME,
-      order: config.order ?? 20000,
-      // Prompt files are literal text, including any {{...}} examples.
-      interpolate: false,
-      text: () => {
-        injection.evaluations++;
-        injection.lastEvaluatedAt = new Date().toISOString();
-        injection.lastEvaluatedScheme = activeScheme;
-        if (injection.proof !== "assembled") injection.proof = "evaluated";
-        return bodyFor();
-      },
-      ...(mode === "purge" ? { complete: true } : {})
-    });
-    injection.registered = true;
+    setEnabled(initiallyEnabled);
     return () => {
-      injection.registered = false;
-      injection.proof = "registered";
-      if (typeof dispose === "function") dispose();
+      disposed = true;
+      enabled = false;
+      unregister();
+      clearEvidence();
     };
   }, "dsh-yanyu-purge.section()");
 
@@ -271,7 +331,7 @@ function apply(ctx, config) {
             ? content.filter((block) => block?.type === "text" && typeof block.text === "string").map((block) => block.text).join("") : "";
           const expected = bodyFor();
           const confirmed = mode === "purge" ? systems.length === 1 && text === expected : text.includes(expected);
-          if (injection.registered && expected && confirmed) {
+          if (enabled && injection.registered && expected && confirmed) {
             injection.proof = "assembled";
             injection.confirmations++;
             injection.lastAssembledAt = new Date().toISOString();
@@ -290,8 +350,6 @@ function apply(ctx, config) {
       };
     }, "dsh-yanyu-purge.observe-system");
   }
-
-  if (!(config.includeRuntimeContext ?? true)) ctx.systemPrompt.suppressRuntimeContext();
 
   attachApi(ctx, log, state);
 }
