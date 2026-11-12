@@ -191,6 +191,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
 
   function snapshot(session, expired = false) {
     return {
+      sessionProtocol: 1,
       status: session?.status || (expired ? "expired" : "signed_out"),
       authenticated: session?.status === "signed_in",
       persistent: Boolean(session?.persistent),
@@ -228,13 +229,16 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       if ([400, 401, 403].includes(response.status)) {
         const login = kind === "login";
         const otp = kind === "2fa";
-        throw new AccountError(response.status, login ? "LOGIN_FAILED" : otp ? "INVALID_2FA" : "AUTH_EXPIRED", login ? "邮箱或密码不正确，或需要到燕语官网完成验证。" : otp ? "验证码无效或已过期，请重新输入。" : "登录已过期，请重新登录。");
+        if (login || otp) throw new AccountError(response.status, login ? "LOGIN_FAILED" : "INVALID_2FA", login ? "邮箱或密码不正确，或需要到燕语官网完成验证。" : "验证码无效或已过期，请重新输入。");
+        // A failed balance lookup is not proof that the refresh grant has expired.
+        if (kind === "refresh" && response.status === 401) throw new AccountError(401, "AUTH_EXPIRED", "登录授权已过期，请重新登录。");
+        throw new AccountError(response.status, response.status === 401 ? "ACCESS_REJECTED" : "UPSTREAM_REJECTED", "本次余额查询未完成，登录状态已保留，稍后会自动重试。");
       }
       if (!response.ok) throw new AccountError(503, "UPSTREAM_UNAVAILABLE", "燕语服务暂时没有响应，稍后会自动重试。");
       let wire;
       try { wire = await response.json(); } catch { throw new AccountError(502, "INVALID_RESPONSE", "燕语返回的数据不完整，请稍后重试。"); }
       if (!wire || wire.code !== 0 || !wire.data || typeof wire.data !== "object" || Array.isArray(wire.data)) {
-        throw new AccountError(kind === "refresh" ? 401 : 400, kind === "login" ? "LOGIN_FAILED" : kind === "2fa" ? "INVALID_2FA" : kind === "refresh" ? "AUTH_EXPIRED" : "INVALID_RESPONSE", kind === "login" ? "登录未成功，请检查账号，或到燕语官网完成验证。" : kind === "2fa" ? "验证码无效或已过期，请重新输入。" : kind === "refresh" ? "登录已过期，请重新登录。" : "燕语返回的数据不完整，请稍后重试。");
+        throw new AccountError(kind === "login" || kind === "2fa" ? 400 : 502, kind === "login" ? "LOGIN_FAILED" : kind === "2fa" ? "INVALID_2FA" : "INVALID_RESPONSE", kind === "login" ? "登录未成功，请检查账号，或到燕语官网完成验证。" : kind === "2fa" ? "验证码无效或已过期，请重新输入。" : "燕语返回的数据不完整，稍后会自动重试。");
       }
       return wire.data;
     } catch (error) {

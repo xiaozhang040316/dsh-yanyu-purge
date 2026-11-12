@@ -270,6 +270,7 @@ window.__ModuleLoader__.load({
     const accountStore = (() => {
       const desktop = window.location.protocol === 'dsh-app:';
       const sessionKey = 'yanyu-purge.account-session.v1';
+      const hostReloadMessage = '插件后台仍是旧版本，请在插件管理中重新加载插件，或完全退出 DSH 后重启。';
       const validSession = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
       let session = '';
       let sessionPersistent = true;
@@ -277,7 +278,7 @@ window.__ModuleLoader__.load({
         try { const saved = window.localStorage.getItem(sessionKey); if (validSession(saved)) session = saved; }
         catch { sessionPersistent = false; }
       }
-      let snapshot = { data: null, busy: '', error: '', sessionPersistent };
+      let snapshot = { data: null, busy: '', error: '', sessionPersistent, hostNeedsReload: false };
       let active = null;
       let timer = null;
       const listeners = new Set();
@@ -298,6 +299,7 @@ window.__ModuleLoader__.load({
         if (listeners.size) timer = setTimeout(tick, Math.max(15000, snapshot.data?.refreshAfterMs || 0, snapshot.error ? 30000 : 0));
       };
       async function run(action = '', body) {
+        if (snapshot.hostNeedsReload && ['login', '2fa'].includes(action)) { publish({ error: hostReloadMessage }); return false; }
         if (active) {
           if (action && active.action === '') active.abort(); else return false;
         }
@@ -322,7 +324,15 @@ window.__ModuleLoader__.load({
           if (!data || !['signed_out', 'signed_in', 'two_factor', 'expired'].includes(data.status) || typeof data.authenticated !== 'boolean') throw new Error('余额状态格式异常，请刷新后重试。');
           if (data.balance !== null && (typeof data.balance !== 'number' || !Number.isFinite(data.balance))) throw new Error('余额格式异常，请稍后刷新。');
           if (active !== controller) return false;
-          publish({ data, error: '' });
+          if (desktop && typeof data.persistent !== 'boolean') {
+            publish({ hostNeedsReload: true });
+            throw new Error(hostReloadMessage);
+          }
+          if (desktop && (data.authenticated || data.status === 'two_factor') && !session) {
+            publish({ hostNeedsReload: true });
+            throw new Error('登录会话未连接，请在插件管理中重新加载插件，或完全退出 DSH 后重启。');
+          }
+          publish({ data, error: '', hostNeedsReload: false });
           return true;
         } catch (error) {
           if (active === controller && listeners.size) publish({ data: snapshot.data?.authenticated ? { ...snapshot.data, stale: true } : snapshot.data, error: controller.signal.aborted ? '请求超时，请稍后重试。' : error instanceof TypeError ? '连接中断，当前显示上次余额。' : error.message });
@@ -384,10 +394,10 @@ window.__ModuleLoader__.load({
               twoFactor ? h('label', { htmlFor: `${id}-code` }, '动态验证码', h('input', { id: `${id}-code`, type: 'text', inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]{6}', maxLength: 6, required: true, value: code, onChange: (e) => setCode(e.target.value), disabled: Boolean(busy) })) : h(React.Fragment, null,
                 h('label', { htmlFor: `${id}-email` }, '邮箱', h('input', { id: `${id}-email`, type: 'email', name: 'email', autoComplete: 'username', maxLength: 254, required: true, value: email, onChange: (e) => setEmail(e.target.value), disabled: Boolean(busy) })),
                 h('label', { htmlFor: `${id}-password` }, '密码', h('input', { id: `${id}-password`, type: 'password', name: 'password', autoComplete: 'current-password', maxLength: 256, required: true, value: password, onChange: (e) => setPassword(e.target.value), disabled: Boolean(busy) }))),
-              h('button', { type: 'submit', className: 'yy-account-btn', 'data-primary': true, disabled: Boolean(busy) }, busy === 'login' || busy === '2fa' ? '正在登录…' : twoFactor ? '验证并登录' : '登录并查询')),
+              h('button', { type: 'submit', className: 'yy-account-btn', 'data-primary': true, disabled: Boolean(busy) || account.hostNeedsReload }, busy === 'login' || busy === '2fa' ? '正在登录…' : twoFactor ? '验证并登录' : '登录并查询')),
             twoFactor ? h('button', { type: 'button', className: 'yy-account-btn', disabled: Boolean(busy), onClick: () => accountStore.run('logout') }, '返回邮箱登录') : null,
-            h('p', { className: 'yy-account-note' }, account.sessionPersistent === false ? '密码仅用于登录；登录状态仅在当前窗口保留，重启后需重新登录。' : '密码仅用于登录；登录状态保存在本机，重启后自动恢复。')),
-        data?.authenticated && account.sessionPersistent === false ? h('p', { className: 'yy-account-note', role: 'status' }, '登录状态仅在当前窗口保留，重启后需重新登录。') : null,
+            h('p', { className: 'yy-account-note' }, account.sessionPersistent === false ? '密码仅用于登录；登录状态仅在当前窗口保留，重启后需重新登录。' : '密码仅用于登录；登录后每 15 秒自动检查余额。')),
+        data?.authenticated ? h('p', { className: 'yy-account-note', role: 'status' }, data.persistent === true && account.sessionPersistent !== false ? '登录状态已保存在本机，重启后自动恢复。' : '登录状态仅在当前窗口保留，重启后需重新登录。') : null,
         error || data?.message ? h('p', { className: 'yy-account-feedback', role: 'alert' }, error || data.message) : null,
         h('span', { className: 'yy-sr', role: 'status', 'aria-live': 'polite' }, busy === 'login' ? '正在登录燕语' : data?.authenticated ? '燕语账号已登录' : ''));
     }
@@ -431,7 +441,7 @@ window.__ModuleLoader__.load({
       const data = account.data;
       const ready = data?.authenticated && !data.stale && !account.error;
       return h('div', { className: 'yy-balance-dock', ref: dock }, h('style', null, BALANCE_CSS),
-        h('button', { className: 'yy-balance-trigger', type: 'button', ref: trigger, onClick: () => setOpen(!open), 'aria-expanded': open, 'aria-controls': open ? id : undefined, 'aria-label': data?.authenticated ? `燕语余额 ${money(data.balance)}，打开账号面板` : '登录燕语查看余额' },
+        h('button', { className: 'yy-balance-trigger', type: 'button', ref: trigger, onClick: () => setOpen(!open), title: data?.authenticated ? '每 15 秒自动检查余额，无需展开浮窗' : '登录一次，余额自动更新', 'aria-expanded': open, 'aria-controls': open ? id : undefined, 'aria-label': data?.authenticated ? `燕语余额 ${money(data.balance)}，打开账号面板` : '登录燕语查看余额' },
           h(Bird, { size: 16 }), h('span', null, '燕语余额'), h('strong', null, data?.authenticated ? money(data.balance) : '登录查询'), h('span', { className: 'yy-balance-mark', 'data-ready': ready, 'aria-hidden': true }), data?.authenticated && !ready ? h('span', null, '待更新') : null),
         open ? createPortal(h('div', { className: 'yy-balance-popover', id, ref: popover, role: 'region', 'aria-label': '燕语余额浮窗', style: position },
           h('div', { className: 'yy-account-head' }, h('h2', null, '燕语余额'), h('button', { type: 'button', className: 'yy-account-btn', onClick: () => { setOpen(false); trigger.current?.focus(); }, 'aria-label': '收起余额浮窗' }, '收起')),

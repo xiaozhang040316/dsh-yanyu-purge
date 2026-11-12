@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-yanyu-purge",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "燕子 · 破甲工作台｜把系统提示词，变成你的主场。红黄蓝绿四方案一键切换，支持 system 覆盖与追加、本地请求确认、动态状态与深浅主题。",
   "type": "module",
   "main": "index.js",
@@ -53,7 +53,7 @@
   ],
   "scripts": {
     "check": "node scripts/check.mjs",
-    "test": "node --test scripts/balance-test.mjs scripts/persistence-test.mjs scripts/session-store-test.mjs scripts/desktop-transport-test.mjs",
+    "test": "node --test scripts/balance-test.mjs scripts/persistence-test.mjs scripts/session-store-test.mjs scripts/desktop-transport-test.mjs scripts/refresh-login-test.mjs scripts/account-client-test.mjs",
     "package": "python scripts/package.py"
   }
 }

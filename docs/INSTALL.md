@@ -9,24 +9,24 @@ DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harnes
 在 DSH 的插件安装输入框粘贴：
 
 ```text
-git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.1
+git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.2
 ```
 
-这是固定到 `v1.4.1` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
+这是固定到 `v1.4.2` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
 
 也可以让 DSH 中已启用插件管理工具的会话执行：
 
 ```text
 请使用 plugin_manager 安装组合包：
 action: install_bundle
-target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.1
+target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.2
 ```
 
 下列路径是 ZIP 本地安装流程。
 
 ## 1. 下载并解压
 
-打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.4.1.zip` 插件包，解压到一个固定目录。例如：
+打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.4.2.zip` 插件包，解压到一个固定目录。例如：
 
 ```text
 C:\Tools\dsh-yanyu-purge
@@ -128,7 +128,7 @@ includeRuntimeContext: true
 4. 查看美元余额与最近更新时间，或点击 **刷新余额**；按 Esc、点击外部或“收起”可关闭浮窗。
 5. 在浮窗或工作台点击 **退出登录**，会立即清除本地会话。
 
-页面可见时每 15 秒检查，隐藏时暂停；遇到限流会延后重试。金额取自燕语账户接口，网络异常时保留上次结果并显示待更新，不将查询失败显示为 0。
+登录一次后，工作台和对话下方余额入口共用会话。页面可见时每 15 秒自动检查，**收起浮窗也会自动更新**，无需点击刷新；隐藏时暂停，切回页面立即检查。遇到限流会延后重试。金额取自燕语账户接口。网络中断、普通接口错误或暂时无效的返回内容会保留登录和上次结果，显示待更新并自动重试；明确的登录授权过期仍需要重新登录。
 
 登录状态会在页面刷新、插件重载和 DSH 重启后自动恢复，恢复时会重新查询余额。密码不保存；访问令牌和刷新令牌通过 AES-256-GCM 加密保存在当前 DSH profile 的 `data/yanyu-purge/sessions/` 中，客户端的随机会话标识用于恢复对应会话。DSH 桌面端因宿主转发层过滤 Cookie，使用应用本地存储保存标识、通过专用请求头传递；普通浏览器使用 HttpOnly Cookie。密码和燕语上游令牌不写入客户端存储。不同客户端分别登录，插件更新不会覆盖会话目录。
 
@@ -163,6 +163,14 @@ includeRuntimeContext: true
 ### 更新后还是旧界面
 
 先核对 DSH 实际安装的是链接目录还是独立副本。重新安装新版目录，随后按提示重载或重启 DSH，再刷新界面。
+
+### 登录成功后，刷新余额又要求登录
+
+先确认新版 **Host 后端** 已加载。只替换文件或刷新界面时，旧后台可能仍然运行；旧版不认识桌面会话标识，就会出现登录后下一次查询丢失状态。
+
+在 **插件管理** 中重新加载破甲工作台，按宿主提示操作；若仍提示“插件后台仍是旧版本”，从系统托盘彻底退出 DSH，再重新打开。仅关闭主窗口可能只是隐藏到托盘。新版会在登录前识别此情况，提示更新后台，避免反复输入密码。
+
+确认重载完成后登录一次，之后手动刷新、自动刷新、工作台与对话切换都会沿用该登录。清除应用数据或授权过期等情况参照上面的登录说明。
 
 ### 切换后重启又变回红燕子
 
