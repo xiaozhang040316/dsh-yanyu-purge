@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createBalanceService } from "./balance.js";
+import { createSessionStore } from "./session-store.js";
 
 /** Cordis plugin name; shown in the plugin inventory. */
 const name = "dsh-yanyu-purge";
@@ -86,7 +87,9 @@ async function readJson(req) {
 }
 
 function attachApi(ctx, log, state) {
-  const balance = createBalanceService();
+  const profile = typeof ctx.get === "function" ? ctx.get("profileContext") : undefined;
+  const sessionStore = profile?.dir ? createSessionStore({ directory: join(profile.dir, "data", "yanyu-purge", "sessions") }) : undefined;
+  const balance = createBalanceService({ sessionStore });
   ctx.effect(() => () => balance.dispose(), "dsh-yanyu-purge.balance");
   const handle = async (req, res) => {
     let url;

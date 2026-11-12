@@ -9,24 +9,24 @@ DSH 项目与宿主安装说明：https://github.com/deepseek-ai/deepseek-harnes
 在 DSH 的插件安装输入框粘贴：
 
 ```text
-git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.0
+git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.1
 ```
 
-这是固定到 `v1.4.0` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
+这是固定到 `v1.4.1` 标签的 Git 包地址。等待安装完成，启用破甲工作台；需要重启时按应用提示操作，然后跳到第 3 节。需要先安装 Git 的环境，或网络不便时，可使用 ZIP 本地安装。
 
 也可以让 DSH 中已启用插件管理工具的会话执行：
 
 ```text
 请使用 plugin_manager 安装组合包：
 action: install_bundle
-target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.0
+target: git+https://github.com/xiaozhang040316/dsh-yanyu-purge.git#v1.4.1
 ```
 
 下列路径是 ZIP 本地安装流程。
 
 ## 1. 下载并解压
 
-打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.4.0.zip` 插件包，解压到一个固定目录。例如：
+打开 [最新 Release](https://github.com/xiaozhang040316/dsh-yanyu-purge/releases/latest)，下载 `dsh-yanyu-purge-v1.4.1.zip` 插件包，解压到一个固定目录。例如：
 
 ```text
 C:\Tools\dsh-yanyu-purge
@@ -130,7 +130,11 @@ includeRuntimeContext: true
 
 页面可见时每 15 秒检查，隐藏时暂停；遇到限流会延后重试。金额取自燕语账户接口，网络异常时保留上次结果并显示待更新，不将查询失败显示为 0。
 
-密码不保存，访问令牌与刷新令牌仅在本机 Host 内存中保存，互不共享的浏览器会话分别登录。页面刷新可保持登录；重载插件、重启 DSH 或会话过期后重新登录。余额浮窗只出现在已有聊天的输入区；空白首页可先从工作台登录。
+登录状态会在页面刷新、插件重载和 DSH 重启后自动恢复，恢复时会重新查询余额。密码不保存；访问令牌和刷新令牌通过 AES-256-GCM 加密保存在当前 DSH profile 的 `data/yanyu-purge/sessions/` 中，客户端的随机会话标识用于恢复对应会话。DSH 桌面端因宿主转发层过滤 Cookie，使用应用本地存储保存标识、通过专用请求头传递；普通浏览器使用 HttpOnly Cookie。密码和燕语上游令牌不写入客户端存储。不同客户端分别登录，插件更新不会覆盖会话目录。
+
+点击 **退出登录** 会删除保存的会话。清除应用站点数据或浏览器 Cookie、连续约 30 天未使用，或燕语登录授权过期后需要重新登录；如果数据目录不可写，面板会提示保存失败。由 v1.4.0 升级时，原先仅保存在内存的会话需要重新登录一次。
+
+工作台支持鼠标滚轮、触控板和触屏纵向滚动；用 Tab 聚焦工作台后，也可使用 Page Down / End 浏览底部内容。余额浮窗会随可视窗口调整位置和最大高度，内容过长时可在浮窗内滚动。余额浮窗只出现在已有聊天的输入区；空白首页可先从工作台登录。
 
 ## 6. 更新插件
 

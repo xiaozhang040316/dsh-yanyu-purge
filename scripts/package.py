@@ -27,7 +27,7 @@ with tarfile.open(tgz, 'r:gz') as archive, zipfile.ZipFile(zip_path, 'w', zipfil
         content = archive.extractfile(entry).read()
         zipped.writestr('dsh-yanyu-purge/' + name, content)
         names.append(name)
-    assert all(name in names for name in ['package.json', 'index.js', 'client.js', 'balance.js', 'icon.svg', 'cordis.patch.yml', 'LICENSE', 'docs/INSTALL.md'])
+    assert all(name in names for name in ['package.json', 'index.js', 'client.js', 'balance.js', 'session-store.js', 'icon.svg', 'cordis.patch.yml', 'LICENSE', 'docs/INSTALL.md'])
     assert len([name for name in names if name.startswith('prompts/')]) == 4
 with zipfile.ZipFile(zip_path) as zipped:
     assert zipped.testzip() is None

@@ -11,7 +11,7 @@ assert.equal(pkg.name, '@local/dsh-yanyu-purge');
 assert.equal(pkg.license, 'MIT');
 assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
 assert.ok(!pkg.private, 'Public plugin discovery requires a non-private package');
-for (const file of ['index.js', 'client.js', 'balance.js']) execFileSync(process.execPath, ['--check', path.join(root, file)]);
+for (const file of ['index.js', 'client.js', 'balance.js', 'session-store.js']) execFileSync(process.execPath, ['--check', path.join(root, file)]);
 for (const locale of ['zh', 'en']) JSON.parse(read(`locale/${locale}.json`));
 const host = read('index.js');
 const files = [...host.matchAll(/file: "([^"]+\.txt)"/g)].map(match => match[1]);

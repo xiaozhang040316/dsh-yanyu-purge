@@ -53,7 +53,8 @@ window.__ModuleLoader__.load({
     }
 
     const CSS = `
-      .yy{--yy-night:#0c1d40;--yy-sky:#bad7eb;--yy-seal:#bf3623;--yy-seal-hover:#a92b1b;--yy-paper:var(--dsw-alias-bg-layer-1,#faf7f0);--yy-ink:var(--dsw-alias-label-primary,#29251f);--yy-muted:var(--dsw-alias-label-secondary,#6b6259);--yy-line:var(--dsw-alias-border-l1,#e4ded3);--yy-tint:color-mix(in srgb,var(--yy-paper) 94%,var(--yy-seal));--yy-accent-ink:color-mix(in srgb,var(--yy-ink) 42%,var(--yy-seal));--yy-serif:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;box-sizing:border-box;width:100%;min-width:0;min-height:100%;background:var(--yy-paper);color:var(--yy-ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;container:yy-panel / inline-size;scrollbar-color:var(--yy-muted) var(--yy-paper)}
+      .yy{--yy-night:#0c1d40;--yy-sky:#bad7eb;--yy-seal:#bf3623;--yy-seal-hover:#a92b1b;--yy-paper:var(--dsw-alias-bg-layer-1,#faf7f0);--yy-ink:var(--dsw-alias-label-primary,#29251f);--yy-muted:var(--dsw-alias-label-secondary,#6b6259);--yy-line:var(--dsw-alias-border-l1,#e4ded3);--yy-tint:color-mix(in srgb,var(--yy-paper) 94%,var(--yy-seal));--yy-accent-ink:color-mix(in srgb,var(--yy-ink) 42%,var(--yy-seal));--yy-serif:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;box-sizing:border-box;position:relative;width:100%;min-width:0;height:100%;min-height:0;flex:1 1 0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-gutter:stable;background:var(--yy-paper);color:var(--yy-ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;container:yy-panel / inline-size;scrollbar-color:var(--yy-muted) var(--yy-paper)}
+      .yy:focus-visible{outline:2px solid var(--yy-accent-ink);outline-offset:-2px}
       .yy *,.yy *::before,.yy *::after{box-sizing:border-box}
       .yy ::selection{background:#bad7eb;color:#0c1d40}
       .yy h1,.yy h2,.yy h3,.yy p{margin:0}
@@ -253,7 +254,7 @@ window.__ModuleLoader__.load({
       .yy-balance-trigger svg{flex:none}
       .yy-balance-mark{width:6px;height:6px;border-radius:50%;background:var(--yb-muted);flex:none}
       .yy-balance-mark[data-ready="true"]{background:#2c7b60}
-      .yy-balance-popover{position:fixed;z-index:2000;width:350px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;background:var(--yb-bg);border:1px solid var(--yb-line);border-radius:12px}
+      .yy-balance-popover{position:fixed;z-index:2000;width:350px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-gutter:stable;padding:20px;background:var(--yb-bg);border:1px solid var(--yb-line);border-radius:12px}
       .yy-balance-popover .yy-account-form{grid-template-columns:1fr}
       .yy-balance-popover .yy-account-overview{display:block}
       .yy-balance-popover .yy-account-actions{margin-top:14px}
@@ -263,16 +264,35 @@ window.__ModuleLoader__.load({
       .yy-balance-popover h2,.yy-balance-popover p{margin:0}
       .yy-balance-popover h2{font-size:17px;font-weight:650;line-height:1.4}
       @container yy-panel (max-width:600px){.yy-account-form{grid-template-columns:1fr}.yy-account-overview{align-items:flex-start}.yy-account-actions{gap:6px}}
-      @media(max-height:520px){.yy-balance-popover{max-height:calc(100dvh - 24px)}}
     `;
 
-    // One local store is shared by the workbench and conversation dock. Auth tokens stay on the host.
+    // Both views share one store. Upstream tokens stay on the host; desktop keeps only an opaque local session.
     const accountStore = (() => {
-      let snapshot = { data: null, busy: '', error: '' };
+      const desktop = window.location.protocol === 'dsh-app:';
+      const sessionKey = 'yanyu-purge.account-session.v1';
+      const validSession = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+      let session = '';
+      let sessionPersistent = true;
+      if (desktop) {
+        try { const saved = window.localStorage.getItem(sessionKey); if (validSession(saved)) session = saved; }
+        catch { sessionPersistent = false; }
+      }
+      let snapshot = { data: null, busy: '', error: '', sessionPersistent };
       let active = null;
       let timer = null;
       const listeners = new Set();
       const publish = (patch) => { snapshot = { ...snapshot, ...patch }; for (const fn of listeners) fn(snapshot); };
+      const acceptSession = (response) => {
+        if (!desktop) return;
+        const value = response.headers.get('x-yanyu-session');
+        if (value === null || (value !== '' && !validSession(value))) return;
+        session = value;
+        try {
+          if (session) window.localStorage.setItem(sessionKey, session);
+          else window.localStorage.removeItem(sessionKey);
+          publish({ sessionPersistent: true });
+        } catch { publish({ sessionPersistent: false }); }
+      };
       const schedule = () => {
         clearTimeout(timer);
         if (listeners.size) timer = setTimeout(tick, Math.max(15000, snapshot.data?.refreshAfterMs || 0, snapshot.error ? 30000 : 0));
@@ -290,9 +310,11 @@ window.__ModuleLoader__.load({
         try {
           const response = await fetch(`${API}/account${action ? '/' + action : ''}`, {
             method: action ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-            headers: { 'x-yanyu-client': '1', ...(action ? { 'content-type': 'application/json' } : {}) },
+            headers: { 'x-yanyu-client': '1', ...(desktop ? { 'x-yanyu-session-mode': 'header', ...(session ? { 'x-yanyu-session': session } : {}) } : {}), ...(action ? { 'content-type': 'application/json' } : {}) },
             ...(action ? { body: JSON.stringify(body || {}) } : {})
           });
+          if (active !== controller) return false;
+          acceptSession(response);
           let wire;
           try { wire = await response.json(); } catch { throw new Error('余额服务暂时没有响应，请稍后重试。'); }
           if (!response.ok || wire?.ok !== true) throw new Error(wire?.error?.message || '操作未完成，请稍后重试。');
@@ -364,7 +386,8 @@ window.__ModuleLoader__.load({
                 h('label', { htmlFor: `${id}-password` }, '密码', h('input', { id: `${id}-password`, type: 'password', name: 'password', autoComplete: 'current-password', maxLength: 256, required: true, value: password, onChange: (e) => setPassword(e.target.value), disabled: Boolean(busy) }))),
               h('button', { type: 'submit', className: 'yy-account-btn', 'data-primary': true, disabled: Boolean(busy) }, busy === 'login' || busy === '2fa' ? '正在登录…' : twoFactor ? '验证并登录' : '登录并查询')),
             twoFactor ? h('button', { type: 'button', className: 'yy-account-btn', disabled: Boolean(busy), onClick: () => accountStore.run('logout') }, '返回邮箱登录') : null,
-            h('p', { className: 'yy-account-note' }, '密码仅用于登录；重载插件后需重新登录。')),
+            h('p', { className: 'yy-account-note' }, account.sessionPersistent === false ? '密码仅用于登录；登录状态仅在当前窗口保留，重启后需重新登录。' : '密码仅用于登录；登录状态保存在本机，重启后自动恢复。')),
+        data?.authenticated && account.sessionPersistent === false ? h('p', { className: 'yy-account-note', role: 'status' }, '登录状态仅在当前窗口保留，重启后需重新登录。') : null,
         error || data?.message ? h('p', { className: 'yy-account-feedback', role: 'alert' }, error || data.message) : null,
         h('span', { className: 'yy-sr', role: 'status', 'aria-live': 'polite' }, busy === 'login' ? '正在登录燕语' : data?.authenticated ? '燕语账号已登录' : ''));
     }
@@ -382,17 +405,28 @@ window.__ModuleLoader__.load({
           const button = trigger.current?.getBoundingClientRect();
           const box = popover.current?.getBoundingClientRect();
           if (!button || !box) return;
-          setPosition({ left: Math.max(12, Math.min(window.innerWidth - box.width - 12, button.left)), top: Math.max(12, Math.min(window.innerHeight - box.height - 12, button.top - box.height - 8)) });
+          const viewport = window.visualViewport;
+          const left = (viewport?.offsetLeft || 0) + 12;
+          const top = (viewport?.offsetTop || 0) + 12;
+          const maxWidth = Math.max(0, (viewport?.width || window.innerWidth) - 24);
+          const maxHeight = Math.max(0, (viewport?.height || window.innerHeight) - 24);
+          const width = Math.min(box.width, maxWidth);
+          const height = Math.min(box.height, maxHeight);
+          const next = { left: Math.max(left, Math.min(left + maxWidth - width, button.left)), top: Math.max(top, Math.min(top + maxHeight - height, button.top - height - 8)), maxWidth, maxHeight };
+          setPosition((previous) => Object.keys(next).every((key) => previous[key] === next[key]) ? previous : next);
         };
+        const scroll = (event) => { if (!(event.target instanceof Node && popover.current?.contains(event.target))) place(); };
         const outside = (event) => { if (!dock.current?.contains(event.target) && !popover.current?.contains(event.target)) setOpen(false); };
         const escape = (event) => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
         const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
         if (popover.current) observer?.observe(popover.current);
         place();
         popover.current?.querySelector('input,button')?.focus({ preventScroll: true });
-        window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
+        const viewport = window.visualViewport;
+        window.addEventListener('resize', place); window.addEventListener('scroll', scroll, true);
+        viewport?.addEventListener('resize', place); viewport?.addEventListener('scroll', place);
         document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
-        return () => { observer?.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+        return () => { observer?.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', scroll, true); viewport?.removeEventListener('resize', place); viewport?.removeEventListener('scroll', place); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
       }, [open]);
       const data = account.data;
       const ready = data?.authenticated && !data.stale && !account.error;
@@ -457,7 +491,7 @@ window.__ModuleLoader__.load({
         document.addEventListener('visibilitychange', visible);
         return () => { alive.current = false; clearInterval(poll); document.removeEventListener('visibilitychange', visible); request.current?.abort(); request.current = null; };
       }, []);
-      return h('div', { className: 'yy' }, h('style', null, CSS),
+      return h('div', { className: 'yy', role: 'region', 'aria-label': '破甲工作台', tabIndex: 0 }, h('style', null, CSS),
         h('header', { className: 'yy-masthead' }, h('div', { className: 'yy-shell' },
           h('div', { className: 'yy-brand-row' },
             h('div', { className: 'yy-brand' }, h(Bird, { size: 46, seal: true }), h('div', null, h('h1', null, '破甲工作台'), h('p', null, '燕子 · DSH'))),

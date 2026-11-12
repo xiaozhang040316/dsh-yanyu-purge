@@ -5,6 +5,7 @@ const COOKIE = "yanyu_balance_session";
 const COOKIE_PATH = "/plugins/yanyu-purge/api";
 const CACHE_MS = 15_000;
 const SESSION_MS = 24 * 60 * 60 * 1000;
+const REMEMBER_MS = 30 * SESSION_MS;
 const MAX_SESSIONS = 32;
 
 class AccountError extends Error {
@@ -37,15 +38,24 @@ function validateLogin(body) {
   }
 }
 
-function cookieId(req) {
+function sessionId(req) {
+  // DSH's desktop protocol proxy strips Cookie/Set-Cookie but preserves custom headers.
+  if (req.headers?.["x-yanyu-session-mode"] === "header") {
+    const value = req.headers["x-yanyu-session"];
+    return typeof value === "string" && /^[a-f0-9]{64}$/.test(value) ? value : null;
+  }
   const cookie = String(req.headers?.cookie || "");
   const value = cookie.split(";").map(item => item.trim()).find(item => item.startsWith(COOKIE + "="))?.slice(COOKIE.length + 1);
   return value && /^[a-f0-9]{64}$/.test(value) ? value : null;
 }
 
-function setCookie(req, res, id) {
+function setCookie(req, res, id, lifetime = SESSION_MS) {
+  if (req.headers?.["x-yanyu-session-mode"] === "header") {
+    res.setHeader("x-yanyu-session", id || "");
+    return;
+  }
   const secure = req.socket?.encrypted ? "; Secure" : "";
-  res.setHeader("set-cookie", `${COOKIE}=${id || ""}; Path=${COOKIE_PATH}; HttpOnly; SameSite=Strict; Max-Age=${id ? 86400 : 0}${secure}`);
+  res.setHeader("set-cookie", `${COOKIE}=${id || ""}; Path=${COOKIE_PATH}; HttpOnly; SameSite=Strict; Max-Age=${id ? Math.floor(lifetime / 1000) : 0}${secure}`);
 }
 
 function validateRequest(req, method) {
@@ -86,11 +96,13 @@ async function readBody(req) {
   }
 }
 
-/** Per-browser, memory-only account sessions. No credentials enter plugin config or logs. */
-export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.now } = {}) {
+/** Per-browser sessions; the optional store encrypts tokens using the client session handle. */
+export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.now, sessionStore } = {}) {
   const sessions = new Map();
   const controllers = new Set();
   let disposed = false;
+  let lastPruned = -Infinity;
+  const lifetime = sessionStore ? REMEMBER_MS : SESSION_MS;
 
   const current = (session, generation) => !disposed && sessions.get(session.id) === session && session.generation === generation;
   const requireCurrent = (session, generation) => {
@@ -104,15 +116,67 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
     Object.assign(session, { status, access: null, refresh: null, temporary: null, tokenExpires: 0,
       balance: null, updatedAt: null, displayName: "", emailMasked: "", stale: false,
       message: status === "expired" ? "登录已过期，请重新登录。" : "", lastFetch: -Infinity,
-      nextAllowed: 0, pending: null, authBusy: false });
+      nextAllowed: 0, pending: null, authBusy: false, persistent: false, storageMessage: "", lastSaved: -Infinity });
+  }
+
+  function forget(session) {
+    try { sessionStore?.remove(session.id); }
+    catch { throw new AccountError(503, "SESSION_STORAGE_ERROR", "本机会话清理失败，请检查数据目录权限后重试。"); }
+  }
+
+  function save(session, force = false) {
+    if (!sessionStore || disposed || session.status !== "signed_in") return;
+    if (!force && session.persistent && now() - session.lastSaved < 60 * 60_000) return;
+    const record = Object.fromEntries(["access", "refresh", "tokenExpires", "lastSeen", "displayName", "emailMasked", "balance", "updatedAt"].map(key => [key, session[key]]));
+    try {
+      sessionStore.write(session.id, record);
+      session.persistent = true;
+      session.lastSaved = now();
+      session.storageMessage = "";
+    } catch {
+      session.persistent = false;
+      session.storageMessage = "已登录，但本机会话保存失败，重启后可能需要重新登录。";
+    }
+  }
+
+  function restore(id) {
+    if (!sessionStore) return undefined;
+    let record;
+    try { record = sessionStore.read(id); }
+    catch { throw new AccountError(503, "SESSION_STORAGE_ERROR", "本机登录状态读取失败，请检查数据目录权限后重试。"); }
+    if (!record) return undefined;
+    if (typeof record.access !== "string" || !record.access || record.access.length > 16_384 ||
+        (record.refresh !== null && (typeof record.refresh !== "string" || record.refresh.length > 16_384)) ||
+        !Number.isFinite(record.tokenExpires) || !Number.isFinite(record.lastSeen) ||
+        record.lastSeen > now() + 300_000 || now() - record.lastSeen >= lifetime) {
+      forget({ id });
+      return undefined;
+    }
+    if (sessions.size >= MAX_SESSIONS) throw new AccountError(429, "SESSION_LIMIT", "登录会话数量已达上限，请退出其他账户面板后重试。", 60_000);
+    const session = { id, generation: 0, controllers: new Set(), lastSeen: record.lastSeen, lastLogin: -Infinity };
+    invalidate(session);
+    Object.assign(session, {
+      status: "signed_in", access: record.access, refresh: record.refresh, tokenExpires: record.tokenExpires,
+      displayName: text(record.displayName, 64), emailMasked: text(record.emailMasked, 254),
+      balance: typeof record.balance === "number" && Number.isFinite(record.balance) ? record.balance : null,
+      updatedAt: typeof record.updatedAt === "string" && Number.isFinite(Date.parse(record.updatedAt)) ? record.updatedAt : null,
+      stale: true, persistent: true, lastSaved: record.lastSeen
+    });
+    sessions.set(id, session);
+    return session;
   }
 
   function prune() {
     for (const session of sessions.values()) {
-      if (now() - session.lastSeen >= SESSION_MS || (session.status === "two_factor" && now() >= session.pendingExpires)) {
+      if (now() - session.lastSeen >= lifetime || (session.status === "two_factor" && now() >= session.pendingExpires)) {
         invalidate(session, "expired");
         sessions.delete(session.id);
+        forget(session);
       }
+    }
+    if (sessionStore && now() - lastPruned >= 60 * 60_000) {
+      try { sessionStore.prune?.(); lastPruned = now(); }
+      catch { /* Individual reads/writes report storage failures without blocking unrelated accounts. */ }
     }
   }
 
@@ -121,7 +185,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
     const session = { id: randomBytes(32).toString("hex"), generation: 0, controllers: new Set(), lastSeen: now(), lastLogin: -Infinity };
     invalidate(session);
     sessions.set(session.id, session);
-    setCookie(req, res, session.id);
+    setCookie(req, res, session.id, lifetime);
     return session;
   }
 
@@ -129,6 +193,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
     return {
       status: session?.status || (expired ? "expired" : "signed_out"),
       authenticated: session?.status === "signed_in",
+      persistent: Boolean(session?.persistent),
       requires2fa: session?.status === "two_factor",
       displayName: session?.displayName || "",
       emailMasked: session?.emailMasked || "",
@@ -136,7 +201,9 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       currency: "USD",
       updatedAt: session?.updatedAt || null,
       stale: Boolean(session?.stale),
-      message: session?.message || (expired ? "登录已过期，请重新登录。" : ""),
+      message: [session?.message, session?.storageMessage,
+        session?.status === "signed_in" && !sessionStore ? "当前宿主未提供账户存储目录，重载后需要重新登录。" : ""
+      ].filter(Boolean).join(" ") || (expired ? "登录已过期，请重新登录。" : ""),
       refreshAfterMs: Math.max(CACHE_MS, (session?.nextAllowed || 0) - now())
     };
   }
@@ -203,6 +270,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
     const data = await upstream("/auth/refresh", { body: { refresh_token: session.refresh }, session, kind: "refresh" });
     requireCurrent(session, generation);
     adoptTokens(session, data);
+    save(session, true);
   }
 
   async function refreshProfile(session, force = false) {
@@ -228,10 +296,12 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
         }
         requireCurrent(session, generation);
         setProfile(session, profile);
+        save(session);
       } catch (error) {
         if (!current(session, generation)) return;
         if (error.code === "AUTH_EXPIRED") {
           invalidate(session, "expired");
+          forget(session);
         } else {
           session.stale = true;
           session.message = error.message;
@@ -258,6 +328,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       credentials = { temp_token: session.temporary, totp_code: body.code.trim() };
     } else {
       validateLogin(body);
+      forget(session);
       invalidate(session);
       session.emailMasked = maskedEmail(body.email);
       path = "/auth/login";
@@ -279,8 +350,10 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       adoptTokens(session, data);
       session.temporary = null;
       session.status = "signed_in";
+      save(session, true);
       await refreshProfile(session, true);
       if (!(sessions.get(session.id) === session && session.status === "expired")) requireCurrent(session, generation);
+      save(session, true);
     } catch (error) {
       if (current(session, generation) && error.retryMs) session.nextAllowed = now() + error.retryMs;
       throw error;
@@ -295,11 +368,15 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       validateRequest(req, method);
       if (disposed) throw new AccountError(503, "UNLOADED", "插件正在重新加载，请稍后重试。");
       prune();
-      const id = cookieId(req);
-      let session = id ? sessions.get(id) : undefined;
-      if (session) session.lastSeen = now();
+      const id = sessionId(req);
+      let session = id ? sessions.get(id) || restore(id) : undefined;
+      if (session) {
+        session.lastSeen = now();
+        save(session);
+      }
       if (method === "GET" && path === "/account") {
         if (session) await refreshProfile(session);
+        if (session?.status === "signed_in") setCookie(req, res, session.id, lifetime);
         json(res, 200, { ok: true, value: snapshot(session, Boolean(id && !session)) });
         return;
       }
@@ -307,6 +384,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
       const body = await readBody(req);
       if (path === "/account/logout") {
         const refresh = session?.refresh;
+        if (id) forget({ id });
         if (session) { invalidate(session); sessions.delete(session.id); }
         setCookie(req, res, null);
         json(res, 200, { ok: true, value: snapshot() });
@@ -321,6 +399,7 @@ export function createBalanceService({ fetchImpl = globalThis.fetch, now = Date.
         if (!session) throw new AccountError(401, "AUTH_EXPIRED", "验证已过期，请重新登录。");
         await signIn(session, body, true);
       } else if (session) await refreshProfile(session, true);
+      if (session?.status === "signed_in") setCookie(req, res, session.id, lifetime);
       json(res, 200, { ok: true, value: snapshot(session, Boolean(id && !session)) });
     } catch (error) {
       const known = error instanceof AccountError ? error : new AccountError(500, "ACCOUNT_ERROR", "账户操作未完成，请刷新后重试。");
